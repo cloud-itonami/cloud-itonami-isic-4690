@@ -1,0 +1,11 @@
+{:itonami.blueprint/id "cloud-itonami-isic-4690"
+ :itonami.blueprint/name "Non-specialized wholesale trade"
+ :itonami.blueprint/isic-rev5 "4690"
+ :itonami.blueprint/domain :commerce/general-trading
+ :itonami.blueprint/license "AGPL-3.0-or-later"
+ :itonami.blueprint/social-impact [:trade-compliance :cross-border-market-access :transparency]
+ :itonami.blueprint/governor :shosha-trading-governor
+ :itonami.blueprint/required-technologies [:identity :forms :dmn :bpmn :audit-ledger :optimization]
+ :itonami.blueprint/status :public-oss
+ :itonami.blueprint/robotics false
+ :itonami.blueprint/maturity :implemented}

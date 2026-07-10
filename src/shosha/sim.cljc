@@ -1,0 +1,103 @@
+(ns shosha.sim
+  "Demo driver -- `clojure -M:dev:run`. Walks a clean trade-order
+  through intake -> contract verification -> shipment dispatch
+  (escalate/approve/commit) -> invoice settlement (escalate/approve/
+  commit), then shows HARD-hold scenarios: a jurisdiction with no
+  spec-basis, a counterparty whose credit has not been cleared, an
+  order with no contract-terms on file, a counterparty that has not
+  passed sanctions screening, an order whose export-control
+  classification has not been cleared, a double dispatch, and a double
+  invoice.
+
+  Like every sibling actor's domain checks, this actor's checks
+  (`credit-uncleared`, `contract-missing`, `export-license-uncleared`,
+  `counterparty-sanctions-flag-unresolved`) are evaluated directly at
+  `:shipment/dispatch` (and sanctions at `:invoice/settle` too) rather
+  than via a separate screening op -- a real dispatch decision
+  validates counterparty credit, contract-on-file, export-control
+  classification and sanctions screening at the point of the act
+  itself, not as a discrete pre-screening ceremony. Each check is still
+  exercised directly and independently below, one order per HARD-hold
+  scenario, following the SAME 'exercise the failure mode directly,
+  never only via a happy-path actuation' discipline `parksafety`'s
+  ADR-2607071922 Decision 5 and every sibling since establish."
+  (:require [langgraph.graph :as g]
+            [shosha.store :as store]
+            [shosha.operation :as op]))
+
+(def operator {:actor-id "op-1" :actor-role :trading-supervisor :phase 3})
+
+(defn- exec-op [actor tid request context]
+  (g/run* actor {:request request :context context} {:thread-id tid}))
+
+(defn- approve! [actor tid]
+  (g/run* actor {:approval {:status :approved :by "op-1"}} {:thread-id tid :resume? true}))
+
+(defn -main [& _]
+  (let [db (store/seed-db)
+        actor (op/build db)]
+    (println "== order/intake to-1 (JPN, steel products, clean) ==")
+    (println (exec-op actor "t1" {:op :order/intake :subject "to-1"
+                                  :patch {:id "to-1" :counterparty "Sendai Trading Co"}} operator))
+
+    (println "== contract/verify to-1 (escalates -- human approves) ==")
+    (println (exec-op actor "t2" {:op :contract/verify :subject "to-1"} operator))
+    (println (approve! actor "t2"))
+
+    (println "== shipment/dispatch to-1 (always escalates -- :shipment/dispatch) ==")
+    (let [r (exec-op actor "t3" {:op :shipment/dispatch :subject "to-1"} operator)]
+      (println r)
+      (println "-- human trading supervisor approves --")
+      (println (approve! actor "t3")))
+
+    (println "== invoice/settle to-1 (always escalates -- :invoice/settle) ==")
+    (let [r (exec-op actor "t4" {:op :invoice/settle :subject "to-1"} operator)]
+      (println r)
+      (println "-- human trading supervisor approves --")
+      (println (approve! actor "t4")))
+
+    (println "== contract/verify to-2 (no spec-basis -> HARD hold) ==")
+    (println (exec-op actor "t5" {:op :contract/verify :subject "to-2"} operator))
+
+    (println "== contract/verify to-3 (escalates -- human approves; sets up the credit-uncleared test) ==")
+    (println (exec-op actor "t6" {:op :contract/verify :subject "to-3"} operator))
+    (println (approve! actor "t6"))
+
+    (println "== shipment/dispatch to-3 (credit not cleared -> HARD hold) ==")
+    (println (exec-op actor "t7" {:op :shipment/dispatch :subject "to-3"} operator))
+
+    (println "== contract/verify to-4 (escalates -- human approves; sets up the contract-missing test) ==")
+    (println (exec-op actor "t8" {:op :contract/verify :subject "to-4"} operator))
+    (println (approve! actor "t8"))
+
+    (println "== shipment/dispatch to-4 (no contract-terms on file -> HARD hold) ==")
+    (println (exec-op actor "t9" {:op :shipment/dispatch :subject "to-4"} operator))
+
+    (println "== contract/verify to-5 (escalates -- human approves; sets up the sanctions test) ==")
+    (println (exec-op actor "t10" {:op :contract/verify :subject "to-5"} operator))
+    (println (approve! actor "t10"))
+
+    (println "== shipment/dispatch to-5 (sanctions screening not passed -> HARD hold) ==")
+    (println (exec-op actor "t11" {:op :shipment/dispatch :subject "to-5"} operator))
+
+    (println "== contract/verify to-6 (escalates -- human approves; sets up the export-license test) ==")
+    (println (exec-op actor "t12" {:op :contract/verify :subject "to-6"} operator))
+    (println (approve! actor "t12"))
+
+    (println "== shipment/dispatch to-6 (export-control classification not cleared -> HARD hold) ==")
+    (println (exec-op actor "t13" {:op :shipment/dispatch :subject "to-6"} operator))
+
+    (println "== shipment/dispatch to-1 AGAIN (double-dispatch -> HARD hold) ==")
+    (println (exec-op actor "t14" {:op :shipment/dispatch :subject "to-1"} operator))
+
+    (println "== invoice/settle to-1 AGAIN (double-invoice -> HARD hold) ==")
+    (println (exec-op actor "t15" {:op :invoice/settle :subject "to-1"} operator))
+
+    (println "== audit ledger ==")
+    (doseq [f (store/ledger db)] (println f))
+
+    (println "== draft shipment-dispatch records ==")
+    (doseq [r (store/shipment-history db)] (println r))
+
+    (println "== draft trade-invoice records ==")
+    (doseq [r (store/invoice-history db)] (println r))))
