@@ -43,10 +43,9 @@
   counterparty, or an operator trusting a general-trading actor needs,
   and the evidence an operator needs if a shipment or an invoice is
   later disputed."
-  (:require #?(:clj  [clojure.edn :as edn]
-               :cljs [cljs.reader :as edn])
-            [shosha.registry :as registry]
-            [langchain.db :as d]))
+  (:require [shosha.registry :as registry]
+            [langchain.db :as d]
+            [langchain-store.core :as ls]))
 
 (defprotocol Store
   (trade-order [s id])
@@ -204,17 +203,14 @@
   Map/compound values (assessment payloads, ledger facts,
   shipment/invoice records) are stored as EDN strings so
   `langchain.db` doesn't expand them into sub-entities -- the same
-  convention every sibling actor's store uses."
-  {:trade-order/id                       {:db/unique :db.unique/identity}
-   :assessment/trade-order-id            {:db/unique :db.unique/identity}
-   :ledger/seq                           {:db/unique :db.unique/identity}
-   :shipment/seq                         {:db/unique :db.unique/identity}
-   :invoice/seq                          {:db/unique :db.unique/identity}
-   :shipment-sequence/jurisdiction       {:db/unique :db.unique/identity}
-   :invoice-sequence/jurisdiction        {:db/unique :db.unique/identity}})
-
-(defn- enc [v] (pr-str v))
-(defn- dec* [s] (when s (edn/read-string s)))
+  convention every sibling actor's store uses. The identity-schema
+  builder, EDN-blob codec and seq-keyed event-log read/append are the
+  shared kotoba-lang/langchain-store machinery (ADR-2607141600) -- the
+  seam ~190 actors hand-roll; this store keeps only its domain wiring."
+  (ls/identity-schema
+   [:trade-order/id :assessment/trade-order-id
+    :ledger/seq :shipment/seq :invoice/seq
+    :shipment-sequence/jurisdiction :invoice-sequence/jurisdiction]))
 
 ;; Every trade-order field is stored as its own Datomic attr so a
 ;; governor pull reads the exact ground truth (no blob decode). Boolean
@@ -266,21 +262,12 @@
          (map #(pull->trade-order (d/pull (d/db conn) trade-order-pull [:trade-order/id %])))
          (sort-by :id)))
   (assessment-of [_ trade-order-id]
-    (dec* (d/q '[:find ?p . :in $ ?toid
+    (ls/dec* (d/q '[:find ?p . :in $ ?toid
                 :where [?a :assessment/trade-order-id ?toid] [?a :assessment/payload ?p]]
               (d/db conn) trade-order-id)))
-  (ledger [_]
-    (->> (d/q '[:find ?s ?f :where [?e :ledger/seq ?s] [?e :ledger/fact ?f]] (d/db conn))
-         (sort-by first)
-         (mapv (comp dec* second))))
-  (shipment-history [_]
-    (->> (d/q '[:find ?s ?r :where [?e :shipment/seq ?s] [?e :shipment/record ?r]] (d/db conn))
-         (sort-by first)
-         (mapv (comp dec* second))))
-  (invoice-history [_]
-    (->> (d/q '[:find ?s ?r :where [?e :invoice/seq ?s] [?e :invoice/record ?r]] (d/db conn))
-         (sort-by first)
-         (mapv (comp dec* second))))
+  (ledger [_] (ls/read-stream conn :ledger/seq :ledger/fact))
+  (shipment-history [_] (ls/read-stream conn :shipment/seq :shipment/record))
+  (invoice-history [_] (ls/read-stream conn :invoice/seq :invoice/record))
   (next-shipment-sequence [_ jurisdiction]
     (or (d/q '[:find ?n . :in $ ?j
               :where [?e :shipment-sequence/jurisdiction ?j] [?e :shipment-sequence/next ?n]]
@@ -301,7 +288,7 @@
       (d/transact! conn [(trade-order->tx value)])
 
       :contract-assessment/set
-      (d/transact! conn [{:assessment/trade-order-id (first path) :assessment/payload (enc payload)}])
+      (d/transact! conn [{:assessment/trade-order-id (first path) :assessment/payload (ls/enc payload)}])
 
       :order/mark-dispatched
       (let [trade-order-id (first path)
@@ -311,7 +298,7 @@
         (d/transact! conn
                      [(trade-order->tx (assoc trade-order-patch :id trade-order-id))
                       {:shipment-sequence/jurisdiction jurisdiction :shipment-sequence/next next-n}
-                      {:shipment/seq (count (shipment-history s)) :shipment/record (enc (get result "record"))}])
+                      {:shipment/seq (count (shipment-history s)) :shipment/record (ls/enc (get result "record"))}])
         result)
 
       :order/mark-invoiced
@@ -322,12 +309,12 @@
         (d/transact! conn
                      [(trade-order->tx (assoc trade-order-patch :id trade-order-id))
                       {:invoice-sequence/jurisdiction jurisdiction :invoice-sequence/next next-n}
-                      {:invoice/seq (count (invoice-history s)) :invoice/record (enc (get result "record"))}])
+                      {:invoice/seq (count (invoice-history s)) :invoice/record (ls/enc (get result "record"))}])
         result)
       nil)
     s)
   (append-ledger! [s fact]
-    (d/transact! conn [{:ledger/seq (count (ledger s)) :ledger/fact (enc fact)}])
+    (ls/append-blob! conn :ledger/seq :ledger/fact (count (ledger s)) fact)
     fact)
   (with-trade-orders [s trade-orders]
     (when (seq trade-orders) (d/transact! conn (mapv trade-order->tx (vals trade-orders)))) s))
