@@ -1,0 +1,617 @@
+(ns shosha.render-html
+  "Build-time HTML renderer for `docs/samples/operator-console.html`.
+
+  Closes flagship checklist item 2 for `cloud-itonami-isic-4690`: the
+  console committed under `docs/samples/` before this namespace existed
+  was HAND-WRITTEN -- no generator produced it, so nothing tied the
+  numbers on the page to the actor. This namespace drives the REAL
+  stack (`shosha.operation` -> `shosha.governor` -> `shosha.store`,
+  each run through `langgraph.graph/run*`) over this repo's own seeded
+  `shosha.store/demo-data` trade-orders `to-1`..`to-6`, and renders the
+  resulting ledger. Every id, counterparty, commodity category,
+  shipment/invoice number, rule name, violation detail and confidence
+  on the page comes out of that run -- none is typed in here.
+
+  The scenario is a superset of `shosha.sim` (`clojure -M:dev:run`,
+  run BEFORE this file was written to learn the real ids and outputs).
+  It adds three governance layers `sim` does not reach:
+
+    - the PHASE gate  -- a `:contract/verify` submitted at phase 1
+                         HOLDs with `:phase-disabled` even though the
+                         governor itself is clean;
+    - the EVIDENCE gate -- `:shipment/dispatch` on the CLEAN order
+                         `to-1` before any assessment is on file
+                         isolates `:evidence-incomplete` as the sole
+                         violation (in `sim` this rule is always
+                         masked by an earlier check);
+    - the APPROVER    -- an escalated `:order/intake` at phase 2 that
+                         the human REJECTS, producing the
+                         `:approval-rejected` disposition.
+
+  Deterministic: no timestamps, no randomness, no wall-clock in the
+  page content -- two consecutive runs are byte-identical.
+
+  `-main` refuses to write a page whose run produced zero
+  `:governor-hold` facts: a console that cannot show the governor
+  refusing is not evidence that the governor works. That is a
+  build-time invariant, not a convention.
+
+  Usage: `clojure -M:dev:render-html [out-file]`
+  (default `docs/samples/operator-console.html`)."
+  (:require [clojure.string :as str]
+            [langgraph.graph :as g]
+            [shosha.facts :as facts]
+            [shosha.governor :as governor]
+            [shosha.operation :as op]
+            [shosha.phase :as phase]
+            [shosha.store :as store]))
+
+;; ----------------------------- scenario -----------------------------
+
+(def ^:private supervisor
+  "Phase 3 (supervised-auto) trading supervisor -- the same operator
+  context `shosha.sim` uses."
+  {:actor-id "op-1" :actor-role :trading-supervisor :phase 3})
+
+(def ^:private supervisor-phase-1
+  "The SAME operator earlier in the rollout. Phase 1 (assisted-intake)
+  permits only `:order/intake` writes, so a governor-clean
+  `:contract/verify` still HOLDs -- `:phase-disabled`."
+  (assoc supervisor :phase 1))
+
+(def ^:private supervisor-phase-2
+  "Phase 2 (assisted-verify): the write is permitted but never
+  auto-eligible, so it escalates to a human even when clean."
+  (assoc supervisor :phase 2))
+
+(defn- run-recorder
+  "Collects the `:audit` channel of every graph run, keyed by
+  thread-id, keeping only the LAST state seen for a thread. A resumed
+  run replays the pre-interrupt audit facts, so concatenating every
+  result would double-count them."
+  []
+  (atom {:order [] :by-tid {}}))
+
+(defn- record! [rec tid result]
+  (swap! rec (fn [{:keys [order by-tid]}]
+               {:order  (if (some #{tid} order) order (conj order tid))
+                :by-tid (assoc by-tid tid (get-in result [:state :audit] []))}))
+  result)
+
+(defn- audit-facts [rec]
+  (let [{:keys [order by-tid]} @rec]
+    (vec (mapcat by-tid order))))
+
+(defn- exec! [actor rec tid request context]
+  (record! rec tid (g/run* actor {:request request :context context}
+                           {:thread-id tid})))
+
+(defn- resume! [actor rec tid approval]
+  (record! rec tid (g/run* actor {:approval approval}
+                           {:thread-id tid :resume? true})))
+
+(defn- approve! [actor rec tid]
+  (resume! actor rec tid {:status :approved :by "op-1"}))
+
+(defn- reject! [actor rec tid]
+  (resume! actor rec tid {:status :rejected :by "op-1"}))
+
+(defn run-demo!
+  "Drives a freshly seeded `shosha.store/MemStore` through the real
+  OperationActor graph and returns `{:db .. :audit ..}`.
+
+  Every op below names a trade-order that exists in
+  `shosha.store/demo-data`; every HARD hold it provokes is the seed
+  record's OWN single injected failure mode (`demo-data` builds each
+  order from one clean `base-order` and overrides exactly one field),
+  so a hold on the page is traceable to one seed field.
+
+  Ordering matters and is deliberate: the evidence gate is exercised
+  BEFORE `to-1`'s assessment is committed, because once the assessment
+  is on file that rule can no longer fire on a clean order."
+  []
+  (let [db    (store/seed-db)
+        actor (op/build db)
+        rec   (run-recorder)]
+
+    ;; -- layer 1: the rollout phase gate, before anything mutates -----
+    ;; governor-clean, but phase 1 does not permit :contract/verify writes.
+    (exec! actor rec "p1-verify-phase1" {:op :contract/verify :subject "to-1"}
+           supervisor-phase-1)
+
+    ;; -- layer 2: the evidence gate, isolated ------------------------
+    ;; to-1 is clean on every boolean; the ONLY thing missing is a
+    ;; committed contract assessment, so :evidence-incomplete stands alone.
+    (exec! actor rec "p2-dispatch-no-evidence" {:op :shipment/dispatch :subject "to-1"}
+           supervisor)
+
+    ;; -- layer 3: the human approver says NO -------------------------
+    ;; phase 2 permits the intake write but never auto-commits it.
+    (exec! actor rec "p3-intake-rejected"
+           {:op :order/intake :subject "to-2"
+            :patch {:id "to-2" :counterparty "Atlantis Trading Ltd"}}
+           supervisor-phase-2)
+    (reject! actor rec "p3-intake-rejected")
+
+    ;; -- layer 4: to-1 full lifecycle at phase 3 ---------------------
+    (exec! actor rec "t1-intake"
+           {:op :order/intake :subject "to-1"
+            :patch {:id "to-1" :counterparty "Sendai Trading Co"}}
+           supervisor)
+
+    (exec! actor rec "t1-verify" {:op :contract/verify :subject "to-1"} supervisor)
+    (approve! actor rec "t1-verify")
+
+    (exec! actor rec "t1-dispatch" {:op :shipment/dispatch :subject "to-1"} supervisor)
+    (approve! actor rec "t1-dispatch")
+
+    (exec! actor rec "t1-settle" {:op :invoice/settle :subject "to-1"} supervisor)
+    (approve! actor rec "t1-settle")
+
+    ;; -- layer 5: one HARD hold per governor rule --------------------
+    ;; to-2 is seeded in jurisdiction "ATL", absent from shosha.facts/catalog.
+    (exec! actor rec "t2-verify" {:op :contract/verify :subject "to-2"} supervisor)
+
+    ;; each of to-3..to-6 first gets a real committed assessment, so the
+    ;; evidence gate is satisfied and the order's own injected field is
+    ;; the single remaining violation.
+    (doseq [[tid subject] [["t3-verify" "to-3"] ["t4-verify" "to-4"]
+                           ["t5-verify" "to-5"] ["t6-verify" "to-6"]]]
+      (exec! actor rec tid {:op :contract/verify :subject subject} supervisor)
+      (approve! actor rec tid))
+
+    (exec! actor rec "t3-dispatch" {:op :shipment/dispatch :subject "to-3"} supervisor)
+    (exec! actor rec "t4-dispatch" {:op :shipment/dispatch :subject "to-4"} supervisor)
+    (exec! actor rec "t5-dispatch" {:op :shipment/dispatch :subject "to-5"} supervisor)
+    (exec! actor rec "t6-dispatch" {:op :shipment/dispatch :subject "to-6"} supervisor)
+
+    ;; -- layer 6: double-actuation guards ----------------------------
+    (exec! actor rec "t1-dispatch-again" {:op :shipment/dispatch :subject "to-1"} supervisor)
+    (exec! actor rec "t1-settle-again" {:op :invoice/settle :subject "to-1"} supervisor)
+
+    {:db db :audit (audit-facts rec)}))
+
+;; ----------------------------- html helpers -----------------------------
+
+(defn- esc [v]
+  (-> (str v)
+      (str/replace "&" "&amp;")
+      (str/replace "<" "&lt;")
+      (str/replace ">" "&gt;")
+      (str/replace "\"" "&quot;")))
+
+(defn- kw-name [v] (if (keyword? v) (name v) (str v)))
+
+(defn- code [v] (str "<code>" (esc v) "</code>"))
+
+(defn- pill [class label] (str "<span class=\"" class "\">" (esc label) "</span>"))
+
+(defn- row [& cells] (str "        <tr>" (apply str (map #(str "<td>" % "</td>") cells)) "</tr>"))
+
+(defn- table [headers rows]
+  (str "    <table>\n"
+       "      <thead><tr>"
+       (apply str (map #(str "<th>" (esc %) "</th>") headers))
+       "</tr></thead>\n"
+       "      <tbody>\n"
+       (str/join "\n" rows) "\n"
+       "      </tbody>\n"
+       "    </table>\n"))
+
+(defn- section [title note body]
+  (str "  <section class=\"card\">\n"
+       "    <h2>" (esc title) "</h2>\n"
+       (if note (str "    <p class=\"muted\">" note "</p>\n") "")
+       body
+       "  </section>\n"))
+
+;; ----------------------------- derived views -----------------------------
+
+(defn- holds
+  "Every HARD `:governor-hold` fact this run produced, in ledger order."
+  [ledger]
+  (filterv #(= :governor-hold (:t %)) ledger))
+
+(defn- hold-rules
+  "The distinct governor rule names that actually fired, in first-seen
+  order. A hold carrying no rule is a PHASE hold (the governor was
+  clean and the rollout phase refused the write)."
+  [ledger]
+  (->> (holds ledger)
+       (mapcat #(or (seq (:basis %)) [(keyword (str "phase/" (name (:phase-reason % :unknown))))]))
+       distinct
+       vec))
+
+(defn- last-fact-for [ledger subject]
+  (last (filter #(= subject (:subject %)) ledger)))
+
+(defn- order-status-cell [ledger {:keys [id]}]
+  (let [f (last-fact-for ledger id)]
+    (cond
+      (nil? f) (pill "muted" "no activity")
+      (= :committed (:t f)) (pill "ok" "committed")
+      (= :approval-rejected (:t f)) (pill "err" "approver rejected")
+      (= :governor-hold (:t f))
+      (pill "critical" (str "HARD hold · "
+                            (or (some-> (first (:basis f)) kw-name)
+                                (str "phase-" (kw-name (:phase-reason f))))))
+      :else (pill "muted" "in progress"))))
+
+(defn- lifecycle-cell [{:keys [dispatched? invoiced?]}]
+  (cond
+    invoiced?   (pill "ok" "dispatched & invoiced")
+    dispatched? (pill "warn" "dispatched, not invoiced")
+    :else       (pill "muted" "not dispatched")))
+
+(defn- flag-cell [v label-true label-false]
+  (if (true? v) (pill "ok" label-true) (pill "critical" label-false)))
+
+(defn- money
+  "Fixed 2-decimal rendering of the seeded price -- no locale, no
+  wall-clock, so the page stays byte-stable."
+  [n]
+  (when (number? n) (str (format "%.2f" (double n)))))
+
+(defn- order-row [ledger {:keys [id order-id commodity-category counterparty
+                                 jurisdiction price] :as o}]
+  (row (code id) (esc order-id) (esc commodity-category) (esc counterparty)
+       (code jurisdiction)
+       (str "<span class=\"num\">" (esc (money price)) "</span>")
+       (lifecycle-cell o)
+       (order-status-cell ledger o)))
+
+(defn- diligence-row [{:keys [id credit-cleared? contract-terms
+                              export-license-cleared? sanctions-screened?]}]
+  (row (code id)
+       (flag-cell credit-cleared? "cleared" "NOT cleared")
+       (if (and contract-terms (not= "" contract-terms))
+         (pill "ok" contract-terms)
+         (pill "critical" "no contract-terms on file"))
+       (flag-cell export-license-cleared? "classified" "NOT classified")
+       (flag-cell sanctions-screened? "screened" "NOT screened")))
+
+(defn- hold-row [{:keys [op subject basis violations confidence phase-reason phase]}]
+  (row (code (kw-name op)) (code subject)
+       (if (seq basis)
+         (str/join " " (map #(pill "critical" (kw-name %)) basis))
+         (pill "err" (str "phase-" (kw-name phase-reason) " (phase " phase ")")))
+       (esc (or (some->> violations (map :detail) (str/join " / "))
+                (str "rollout phase " phase " does not permit this write")))
+       (str "<span class=\"num\">" (esc confidence) "</span>")))
+
+(defn- ledger-row [{:keys [t op subject disposition basis summary phase-reason]}]
+  (row (pill (case t
+               :committed "ok"
+               :governor-hold "critical"
+               :approval-rejected "err"
+               "muted")
+             (kw-name t))
+       (code (kw-name (or op :n-a)))
+       (code subject)
+       (esc (kw-name (or disposition "")))
+       (esc (or (some->> basis seq (map kw-name) (str/join ", "))
+                (some-> phase-reason kw-name)
+                ""))
+       (esc (or summary ""))))
+
+(defn- evidence-checklist-row [db {:keys [id jurisdiction]}]
+  (let [assessment (store/assessment-of db id)
+        checklist  (:checklist assessment)
+        satisfied? (facts/required-evidence-satisfied? jurisdiction checklist)]
+    (row (code id) (code jurisdiction)
+         (if assessment
+           (str "<span class=\"num\">" (count checklist) " / "
+                (count (facts/evidence-checklist jurisdiction)) "</span>")
+           (pill "muted" "no assessment committed"))
+         (esc (or (:spec-basis assessment) ""))
+         (if satisfied?
+           (pill "ok" "complete")
+           (pill "critical" "incomplete — dispatch/settle blocked")))))
+
+(defn- catalog-row [[iso3 {:keys [owner-authority legal-basis provenance
+                                  required-evidence]}]]
+  (row (code iso3) (esc owner-authority) (esc legal-basis)
+       (str "<span class=\"num\">" (count required-evidence) "</span>")
+       (code provenance)))
+
+(defn- phase-gate-row
+  "Derived from `shosha.phase/phases` and `shosha.governor/high-stakes`
+  -- the actual data structures the gate consults, not a hand-written
+  description of them."
+  [op]
+  (let [write-in (sort (keep (fn [[p {:keys [writes]}]] (when (writes op) p)) phase/phases))
+        auto-in  (sort (keep (fn [[p {:keys [auto]}]] (when (auto op) p)) phase/phases))
+        high?    (contains? governor/high-stakes op)]
+    (row (code (kw-name op))
+         (esc (str/join ", " (map str write-in)))
+         (if (seq auto-in)
+           (pill "ok" (str "phase " (str/join ", " (map str auto-in))))
+           (pill "critical" "never — no phase"))
+         (if high?
+           (pill "critical" "high-stakes: ALWAYS a human")
+           (pill "warn" "human unless auto-eligible")))))
+
+(defn- approval-attribution-rows
+  "Approver attribution, DERIVED at render time rather than asserted.
+
+  The `:approval-granted` fact carries the approver, but it is written
+  to the run's `:audit` channel only -- the `:commit` node appends the
+  `:committed` fact to the ledger, so the approver never lands there.
+  Whether the approver survives into the SSoT then depends on the
+  EFFECT: `shosha.store`'s `commit-record!` reads `:payload` for
+  `:contract-assessment/set` (which is where `shosha.operation`'s
+  `:request-approval` node puts `:approved-by`), but derives
+  `:order/mark-dispatched` / `:order/mark-invoiced` records from
+  `shosha.registry`, which has no approver field at all.
+
+  So each row below re-checks the STORED artifact for the approver key
+  instead of hardcoding a verdict: if the store is later fixed, this
+  page corrects itself on the next build."
+  [db audit]
+  (for [{:keys [op subject by]} (filter #(= :approval-granted (:t %)) audit)]
+    (let [order      (store/trade-order db subject)
+          assessment (store/assessment-of db subject)
+          artifact   (case op
+                       :contract/verify   assessment
+                       :shipment/dispatch (first (filter #(= subject (get % "trade_order_id"))
+                                                         (store/shipment-history db)))
+                       :invoice/settle    (first (filter #(= subject (get % "trade_order_id"))
+                                                         (store/invoice-history db)))
+                       order)
+          kept?      (boolean (and (map? artifact)
+                                   (or (contains? artifact :approved-by)
+                                       (contains? artifact "approved_by"))))
+          stored-as  (case op
+                       :contract/verify   "assessments/<order>"
+                       :shipment/dispatch (or (:shipment-number order) "shipments/<record>")
+                       :invoice/settle    (or (:invoice-number order) "invoices/<record>")
+                       "trade-orders/<order>")]
+      (row (code (kw-name op)) (code subject) (esc by) (code stored-as)
+           (if kept?
+             (pill "ok" "yes — present in the commit record")
+             (pill "warn" "no — audit only, not in commit record"))))))
+
+;; ----------------------------- css -----------------------------
+
+(def ^:private dds-css
+  "The jp-go-digital-design-system (DADS) primitives this console
+  actually references, copied verbatim from the DADS CSS already
+  vendored into this repo's own `docs/index.html`, so the console wears
+  the same face as the product page and the build stays fully offline
+  (no git dep, no network). Only primitives referenced below are
+  included, and every `var(--...)` used in this stylesheet is defined
+  here. Tint backgrounds use the `-50` primitive steps: the DADS
+  `--color-semantic-error-1` / `-2` pair is red-800 / red-900, i.e.
+  BOTH dark, not a strong/weak pair."
+  (str
+   ":root{"
+   "--color-neutral-white:#ffffff;"
+   "--color-neutral-solid-gray-50:#f2f2f2;"
+   "--color-neutral-solid-gray-100:#e6e6e6;"
+   "--color-neutral-solid-gray-200:#cccccc;"
+   "--color-neutral-solid-gray-300:#b3b3b3;"
+   "--color-neutral-solid-gray-536:#767676;"
+   "--color-neutral-solid-gray-600:#666666;"
+   "--color-neutral-solid-gray-700:#4d4d4d;"
+   "--color-neutral-solid-gray-900:#1a1a1a;"
+   "--color-primitive-blue-50:#e8f1fe;"
+   "--color-primitive-blue-900:#0017c1;"
+   "--color-primitive-green-50:#e6f5ec;"
+   "--color-primitive-green-900:#115a36;"
+   "--color-primitive-red-50:#fdeeee;"
+   "--color-primitive-red-800:#ec0000;"
+   "--color-primitive-red-900:#ce0000;"
+   "--color-primitive-orange-50:#ffeee2;"
+   "--color-primitive-orange-900:#ac3e00;"
+   "--font-family-sans:\"Noto Sans JP\",-apple-system,BlinkMacSystemFont,sans-serif;"
+   "--font-family-mono:\"Noto Sans Mono\",monospace;"
+   "}\n"
+   "*{box-sizing:border-box}\n"
+   "body{margin:0;font-family:var(--font-family-sans);color:var(--color-neutral-solid-gray-900);"
+   "background:var(--color-neutral-solid-gray-50);line-height:1.7;}\n"
+   "header.bar{display:flex;flex-wrap:wrap;align-items:center;gap:12px;padding:16px 24px;"
+   "background:var(--color-neutral-white);border-bottom:4px solid var(--color-primitive-blue-900);}\n"
+   "header.bar h1{font-size:18px;margin:0;font-weight:700;}\n"
+   "header.bar .badge{margin-left:auto;font-size:12px;color:var(--color-neutral-solid-gray-600);"
+   "border:1px solid var(--color-neutral-solid-gray-200);border-radius:999px;padding:2px 10px;}\n"
+   "main{max-width:1180px;margin:24px auto 48px;padding:0 20px;}\n"
+   "section.card{background:var(--color-neutral-white);border:1px solid var(--color-neutral-solid-gray-200);"
+   "border-radius:8px;padding:20px 20px 8px;margin-bottom:20px;}\n"
+   "section.card h2{margin:0 0 4px;font-size:16px;font-weight:700;}\n"
+   "p.muted{color:var(--color-neutral-solid-gray-600);font-size:13px;margin:0 0 12px;}\n"
+   "table{width:100%;border-collapse:collapse;font-size:13px;margin-bottom:12px;}\n"
+   "th{text-align:left;padding:8px 10px;font-size:11px;font-weight:700;text-transform:uppercase;"
+   "letter-spacing:.04em;color:var(--color-neutral-solid-gray-700);"
+   "border-bottom:2px solid var(--color-neutral-solid-gray-300);}\n"
+   "td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--color-neutral-solid-gray-100);"
+   "vertical-align:top;}\n"
+   "tr:last-child td{border-bottom:none;}\n"
+   "code{font-family:var(--font-family-mono);font-size:.92em;background:var(--color-neutral-solid-gray-50);"
+   "border:1px solid var(--color-neutral-solid-gray-100);border-radius:4px;padding:1px 5px;}\n"
+   ".num{font-variant-numeric:tabular-nums;}\n"
+   ".ok{color:var(--color-primitive-green-900);background:var(--color-primitive-green-50);"
+   "border-radius:4px;padding:2px 8px;display:inline-block;}\n"
+   ".warn{color:var(--color-primitive-orange-900);background:var(--color-primitive-orange-50);"
+   "border-radius:4px;padding:2px 8px;display:inline-block;}\n"
+   ".err{color:var(--color-primitive-red-900);background:var(--color-primitive-red-50);"
+   "border-radius:4px;padding:2px 8px;display:inline-block;}\n"
+   ".critical{color:var(--color-neutral-white);background:var(--color-primitive-red-800);"
+   "border-radius:4px;padding:2px 8px;font-weight:700;display:inline-block;}\n"
+   ".muted{color:var(--color-neutral-solid-gray-536);}\n"
+   ".stat{display:inline-block;min-width:132px;margin:0 16px 12px 0;}\n"
+   ".stat b{display:block;font-size:22px;font-variant-numeric:tabular-nums;"
+   "color:var(--color-primitive-blue-900);}\n"
+   ".stat span{font-size:12px;color:var(--color-neutral-solid-gray-600);}\n"
+   "footer{max-width:1180px;margin:0 auto 40px;padding:0 20px;font-size:12px;"
+   "color:var(--color-neutral-solid-gray-536);}\n"))
+
+;; ----------------------------- render -----------------------------
+
+(defn render
+  "Renders the whole document from `{:db .. :audit ..}` produced by
+  `run-demo!`. Pure: same input, same bytes."
+  [{:keys [db audit]}]
+  (let [ledger      (vec (store/ledger db))
+        orders      (vec (store/all-trade-orders db))
+        hold-facts  (holds ledger)
+        rules       (hold-rules ledger)
+        committed   (filterv #(= :committed (:t %)) ledger)
+        rejected    (filterv #(= :approval-rejected (:t %)) ledger)
+        jurisdictions (distinct (map :jurisdiction orders))
+        cov         (facts/coverage jurisdictions)
+        shipments   (vec (store/shipment-history db))
+        invoices    (vec (store/invoice-history db))]
+    (str
+     "<!doctype html>\n<html lang=\"en\"><head><meta charset=\"utf-8\">\n"
+     "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1, viewport-fit=cover\">\n"
+     "<meta name=\"color-scheme\" content=\"light\"><meta name=\"theme-color\" content=\"#ffffff\">\n"
+     "<title>cloud-itonami-isic-4690 · Non-specialized wholesale trade — Operator Console</title>\n"
+     "<style>" dds-css "</style></head><body>\n"
+     "<header class=\"bar\">\n"
+     "  <h1>Non-specialized wholesale trade (ISIC 4690) — Operator Console</h1>\n"
+     "  <span class=\"badge\">generated · governor-gated · dispatch &amp; settlement always human-approved</span>\n"
+     "</header>\n"
+     "<main>\n"
+
+     (section
+      "This run"
+      (str "Generated at build time by " (code "shosha.render-html")
+           " (" (code "clojure -M:dev:render-html") ") from a live "
+           (code "langgraph.graph/run*") " scenario over "
+           (code "shosha.store/demo-data") ". Nothing on this page is typed in by hand; "
+           "no timestamps or random values, so consecutive builds are byte-identical.")
+      (str "    <div>\n"
+           (str/join "\n"
+                     [(str "      <div class=\"stat\"><b>" (count orders) "</b><span>seeded trade-orders</span></div>")
+                      (str "      <div class=\"stat\"><b>" (count ledger) "</b><span>ledger facts</span></div>")
+                      (str "      <div class=\"stat\"><b>" (count committed) "</b><span>committed ops</span></div>")
+                      (str "      <div class=\"stat\"><b>" (count hold-facts) "</b><span>HARD governor holds</span></div>")
+                      (str "      <div class=\"stat\"><b>" (count rules) "</b><span>distinct hold reasons</span></div>")
+                      (str "      <div class=\"stat\"><b>" (count rejected) "</b><span>approver rejections</span></div>")
+                      (str "      <div class=\"stat\"><b>" (count shipments) "</b><span>shipment drafts</span></div>")
+                      (str "      <div class=\"stat\"><b>" (count invoices) "</b><span>invoice drafts</span></div>")])
+           "\n    </div>\n"))
+
+     (section
+      "Trade-order book"
+      (str "The seeded order book spans UNRELATED commodity categories on the same book — "
+           "the honest shape of a non-specialized (general/diversified) trading house. "
+           "Each order isolates exactly one failure mode; every other field is in its clean state.")
+      (table ["Id" "Order" "Commodity" "Counterparty" "Jurisdiction" "Price"
+              "Lifecycle" "Last disposition"]
+             (map (partial order-row ledger) orders)))
+
+     (section
+      "Counterparty diligence &amp; trade-control facts"
+      (str "The exact booleans " (code "shosha.governor")
+           " reads off each " (code "trade-order")
+           " record. These are ground truth from the store — the governor never "
+           "trusts the advisor's self-reported confidence for any of them.")
+      (table ["Id" "Credit clearance" "Contract on file"
+              "Export-control classification" "Sanctions screening"]
+             (map diligence-row orders)))
+
+     (section
+      "HARD governor holds (this run)"
+      (str "A HARD hold is un-overridable: it never reaches a human approver at all. "
+           "Rules that fired: "
+           (str/join " " (map #(pill "critical" (kw-name %)) rules))
+           ". Each row's detail text is the governor's own message, not a paraphrase.")
+      (table ["Op" "Subject" "Rule" "Governor detail" "Advisor confidence"]
+             (map hold-row hold-facts)))
+
+     (section
+      "Evidence completeness per jurisdiction"
+      (str "The " (code ":evidence-incomplete")
+           " gate: before a shipment dispatch or an invoice settlement, the order's "
+           "jurisdiction must have a committed assessment satisfying every required "
+           "evidence item in " (code "shosha.facts")
+           ". Counts and spec-basis URLs below are read back out of the store.")
+      (table ["Id" "Jurisdiction" "Evidence on file" "Cited spec-basis" "Verdict"]
+             (map (partial evidence-checklist-row db) orders)))
+
+     (section
+      "Jurisdiction spec-basis catalog"
+      (str "Coverage is reported honestly: of the "
+           (:requested cov) " jurisdiction(s) appearing in the order book above, "
+           (:covered cov) " have an official spec-basis ("
+           (str/join ", " (:covered-jurisdictions cov)) ")"
+           (if (seq (:missing-jurisdictions cov))
+             (str " and " (count (:missing-jurisdictions cov)) " do NOT ("
+                  (str/join ", " (:missing-jurisdictions cov))
+                  ") — the advisor must not invent requirements for those, and the governor holds if it tries.")
+             ".")
+           " The full seeded catalog follows.")
+      (table ["ISO3" "Owner authority" "Legal basis" "Required evidence" "Provenance"]
+             (map catalog-row (sort-by key facts/catalog))))
+
+     (section
+      "Action gate (phase × governor)"
+      (str "Derived from " (code "shosha.phase/phases") " and "
+           (code "shosha.governor/high-stakes")
+           " — the actual data the gate consults. Two independent layers agree that "
+           (code ":shipment/dispatch") " and " (code ":invoice/settle")
+           " are always a human call: they are absent from every phase's auto set AND "
+           "unconditionally high-stakes in the governor.")
+      (table ["Op" "Writable in phases" "Auto-committable" "Governor stake"]
+             (map phase-gate-row (sort-by kw-name phase/write-ops))))
+
+     (section
+      "Approver attribution (derived, not asserted)"
+      (str "Measured on this run rather than assumed. The approver identity lives in the "
+           (code ":approval-granted") " audit fact, which the " (code ":commit")
+           " node does NOT append to the ledger — so it is absent from the audit ledger below. "
+           "Whether it survives into the SSoT depends on the effect: "
+           (code "shosha.store/commit-record!") " reads " (code ":payload")
+           " for " (code ":contract-assessment/set") ", but derives dispatch and invoice "
+           "records from " (code "shosha.registry")
+           ", which carries no approver field. Each row re-checks the STORED artifact, "
+           "so this page corrects itself if the store is fixed.")
+      (table ["Op" "Subject" "Approved by (audit fact)" "Stored artifact" "Survives into commit record?"]
+             (approval-attribution-rows db audit)))
+
+     (section
+      "Committed actuation drafts"
+      (str "Shipment and invoice records built by " (code "shosha.registry")
+           " — unsigned drafts of the record an operator would keep. Signature is "
+           "the operator's act, not this actor's; this namespace calls no real "
+           "freight-forwarder, customs or billing system.")
+      (table ["Record id" "Kind" "Trade-order" "Jurisdiction" "Immutable"]
+             (map (fn [r]
+                    (row (code (get r "record_id")) (esc (get r "kind"))
+                         (code (get r "trade_order_id")) (code (get r "jurisdiction"))
+                         (esc (get r "immutable"))))
+                  (concat shipments invoices))))
+
+     (section
+      "Audit ledger (this run)"
+      (str "The append-only decision-fact log, in order. " (count ledger)
+           " facts: every commit and every refusal, with the basis the decision rested on.")
+      (table ["Fact" "Op" "Subject" "Disposition" "Basis" "Summary"]
+             (map ledger-row ledger)))
+
+     "</main>\n"
+     "<footer>Generated by <code>shosha.render-html</code> from the real "
+     "<code>shosha.operation</code> → <code>shosha.governor</code> → <code>shosha.store</code> stack. "
+     "Styling uses jp-go-digital-design-system primitives vendored in this repo's own "
+     "<code>docs/index.html</code>. Read-only sample.</footer>\n"
+     "</body></html>\n")))
+
+(defn -main [& args]
+  (let [out    (or (first args) "docs/samples/operator-console.html")
+        result (run-demo!)
+        ledger (vec (store/ledger (:db result)))
+        hold-facts (holds ledger)
+        rules  (hold-rules ledger)]
+    ;; Build-time invariant, not a convention: a console that never shows
+    ;; the governor refusing is not evidence that the governor works.
+    (when (zero? (count hold-facts))
+      (throw (ex-info "render-html: the scenario produced ZERO :governor-hold facts -- refusing to write a console that cannot show the governor refusing"
+                      {:ledger-facts (count ledger)
+                       :dispositions (frequencies (map :t ledger))})))
+    (spit out (render result))
+    (println "wrote" out
+             (str "(" (count ledger) " ledger facts, "
+                  (count hold-facts) " HARD holds, "
+                  (count rules) " distinct hold reasons: "
+                  (str/join ", " (map kw-name rules)) ")"))))
