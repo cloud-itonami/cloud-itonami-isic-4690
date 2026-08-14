@@ -3,7 +3,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="light"><meta name="theme-color" content="#ffffff">
 <title>cloud-itonami-isic-4690 · Non-specialized wholesale trade — Operator Console</title>
-<style>:root{--color-neutral-white:#ffffff;--color-neutral-solid-gray-50:#f2f2f2;--color-neutral-solid-gray-100:#e6e6e6;--color-neutral-solid-gray-200:#cccccc;--color-neutral-solid-gray-300:#b3b3b3;--color-neutral-solid-gray-536:#767676;--color-neutral-solid-gray-600:#666666;--color-neutral-solid-gray-700:#4d4d4d;--color-neutral-solid-gray-900:#1a1a1a;--color-primitive-blue-50:#e8f1fe;--color-primitive-blue-900:#0017c1;--color-primitive-green-50:#e6f5ec;--color-primitive-green-900:#115a36;--color-primitive-red-50:#fdeeee;--color-primitive-red-800:#ec0000;--color-primitive-red-900:#ce0000;--color-primitive-orange-50:#ffeee2;--color-primitive-orange-900:#ac3e00;--font-family-sans:"Noto Sans JP",-apple-system,BlinkMacSystemFont,sans-serif;--font-family-mono:"Noto Sans Mono",monospace;}
+<style>:root{--color-neutral-white:#ffffff;--color-neutral-solid-gray-50:#f2f2f2;--color-neutral-solid-gray-100:#e6e6e6;--color-neutral-solid-gray-200:#cccccc;--color-neutral-solid-gray-300:#b3b3b3;--color-neutral-solid-gray-536:#767676;--color-neutral-solid-gray-600:#666666;--color-neutral-solid-gray-700:#4d4d4d;--color-neutral-solid-gray-900:#1a1a1a;--color-primitive-blue-900:#0017c1;--color-primitive-green-50:#e6f5ec;--color-primitive-green-900:#115a36;--color-primitive-red-50:#fdeeee;--color-primitive-red-800:#ec0000;--color-primitive-red-900:#ce0000;--color-primitive-orange-50:#ffeee2;--color-primitive-orange-900:#ac3e00;--font-family-sans:"Noto Sans JP",-apple-system,BlinkMacSystemFont,sans-serif;--font-family-mono:"Noto Sans Mono",monospace;}
 *{box-sizing:border-box}
 body{margin:0;font-family:var(--font-family-sans);color:var(--color-neutral-solid-gray-900);background:var(--color-neutral-solid-gray-50);line-height:1.7;}
 header.bar{display:flex;flex-wrap:wrap;align-items:center;gap:12px;padding:16px 24px;background:var(--color-neutral-white);border-bottom:4px solid var(--color-primitive-blue-900);}
@@ -84,15 +84,15 @@ footer{max-width:1180px;margin:0 auto 40px;padding:0 20px;font-size:12px;color:v
     <table>
       <thead><tr><th>Op</th><th>Subject</th><th>Rule</th><th>Governor detail</th><th>Advisor confidence</th></tr></thead>
       <tbody>
-        <tr><td><code>verify</code></td><td><code>to-1</code></td><td><span class="err">phase-phase-disabled (phase 1)</span></td><td></td><td><span class="num">0.9</span></td></tr>
-        <tr><td><code>dispatch</code></td><td><code>to-1</code></td><td><span class="critical">evidence-incomplete</span></td><td>法域の必要書類(信用審査記録/契約書またはPO/制裁スクリーニング記録/輸出管理該非判定記録)が充足していない状態での提案</td><td><span class="num">0.9</span></td></tr>
-        <tr><td><code>verify</code></td><td><code>to-2</code></td><td><span class="critical">no-spec-basis</span></td><td>公式spec-basisの引用が無い提案は法域要件として扱えない</td><td><span class="num">0.9</span></td></tr>
-        <tr><td><code>dispatch</code></td><td><code>to-3</code></td><td><span class="critical">credit-uncleared</span></td><td>to-3 の取引先信用審査(credit-clearance)が未了 -- 出荷提案は進められない</td><td><span class="num">0.3</span></td></tr>
-        <tr><td><code>dispatch</code></td><td><code>to-4</code></td><td><span class="critical">contract-missing</span></td><td>to-4 に契約条項(contract-terms)の記録が無い -- 出荷提案は進められない</td><td><span class="num">0.3</span></td></tr>
-        <tr><td><code>dispatch</code></td><td><code>to-5</code></td><td><span class="critical">counterparty-sanctions-flag-unresolved</span></td><td>to-5 の取引先制裁スクリーニング(OFAC等)が未了 -- 出荷・請求提案は進められない</td><td><span class="num">0.3</span></td></tr>
-        <tr><td><code>dispatch</code></td><td><code>to-6</code></td><td><span class="critical">export-license-uncleared</span></td><td>to-6 の輸出管理該非判定/許可(export-control classification)が未了 -- 出荷提案は進められない</td><td><span class="num">0.3</span></td></tr>
-        <tr><td><code>dispatch</code></td><td><code>to-1</code></td><td><span class="critical">already-dispatched</span></td><td>to-1 は既に出荷済み</td><td><span class="num">0.9</span></td></tr>
-        <tr><td><code>settle</code></td><td><code>to-1</code></td><td><span class="critical">already-invoiced</span></td><td>to-1 は既に請求済み</td><td><span class="num">0.9</span></td></tr>
+        <tr><td><code>:contract/verify</code></td><td><code>to-1</code></td><td><span class="err">phase-disabled (phase 1)</span></td><td></td><td><span class="num">0.9</span></td></tr>
+        <tr><td><code>:shipment/dispatch</code></td><td><code>to-1</code></td><td><span class="critical">evidence-incomplete</span></td><td>法域の必要書類(信用審査記録/契約書またはPO/制裁スクリーニング記録/輸出管理該非判定記録)が充足していない状態での提案</td><td><span class="num">0.9</span></td></tr>
+        <tr><td><code>:contract/verify</code></td><td><code>to-2</code></td><td><span class="critical">no-spec-basis</span></td><td>公式spec-basisの引用が無い提案は法域要件として扱えない</td><td><span class="num">0.9</span></td></tr>
+        <tr><td><code>:shipment/dispatch</code></td><td><code>to-3</code></td><td><span class="critical">credit-uncleared</span></td><td>to-3 の取引先信用審査(credit-clearance)が未了 -- 出荷提案は進められない</td><td><span class="num">0.3</span></td></tr>
+        <tr><td><code>:shipment/dispatch</code></td><td><code>to-4</code></td><td><span class="critical">contract-missing</span></td><td>to-4 に契約条項(contract-terms)の記録が無い -- 出荷提案は進められない</td><td><span class="num">0.3</span></td></tr>
+        <tr><td><code>:shipment/dispatch</code></td><td><code>to-5</code></td><td><span class="critical">counterparty-sanctions-flag-unresolved</span></td><td>to-5 の取引先制裁スクリーニング(OFAC等)が未了 -- 出荷・請求提案は進められない</td><td><span class="num">0.3</span></td></tr>
+        <tr><td><code>:shipment/dispatch</code></td><td><code>to-6</code></td><td><span class="critical">export-license-uncleared</span></td><td>to-6 の輸出管理該非判定/許可(export-control classification)が未了 -- 出荷提案は進められない</td><td><span class="num">0.3</span></td></tr>
+        <tr><td><code>:shipment/dispatch</code></td><td><code>to-1</code></td><td><span class="critical">already-dispatched</span></td><td>to-1 は既に出荷済み</td><td><span class="num">0.9</span></td></tr>
+        <tr><td><code>:invoice/settle</code></td><td><code>to-1</code></td><td><span class="critical">already-invoiced</span></td><td>to-1 は既に請求済み</td><td><span class="num">0.9</span></td></tr>
       </tbody>
     </table>
   </section>
@@ -130,10 +130,10 @@ footer{max-width:1180px;margin:0 auto 40px;padding:0 20px;font-size:12px;color:v
     <table>
       <thead><tr><th>Op</th><th>Writable in phases</th><th>Auto-committable</th><th>Governor stake</th></tr></thead>
       <tbody>
-        <tr><td><code>dispatch</code></td><td>3</td><td><span class="critical">never — no phase</span></td><td><span class="critical">high-stakes: ALWAYS a human</span></td></tr>
-        <tr><td><code>intake</code></td><td>1, 2, 3</td><td><span class="ok">phase 3</span></td><td><span class="warn">human unless auto-eligible</span></td></tr>
-        <tr><td><code>settle</code></td><td>3</td><td><span class="critical">never — no phase</span></td><td><span class="critical">high-stakes: ALWAYS a human</span></td></tr>
-        <tr><td><code>verify</code></td><td>2, 3</td><td><span class="critical">never — no phase</span></td><td><span class="warn">human unless auto-eligible</span></td></tr>
+        <tr><td><code>:contract/verify</code></td><td>2, 3</td><td><span class="critical">never — no phase</span></td><td><span class="warn">human unless auto-eligible</span></td></tr>
+        <tr><td><code>:invoice/settle</code></td><td>3</td><td><span class="critical">never — no phase</span></td><td><span class="critical">high-stakes: ALWAYS a human</span></td></tr>
+        <tr><td><code>:order/intake</code></td><td>1, 2, 3</td><td><span class="ok">phase 3</span></td><td><span class="warn">human unless auto-eligible</span></td></tr>
+        <tr><td><code>:shipment/dispatch</code></td><td>3</td><td><span class="critical">never — no phase</span></td><td><span class="critical">high-stakes: ALWAYS a human</span></td></tr>
       </tbody>
     </table>
   </section>
@@ -143,13 +143,13 @@ footer{max-width:1180px;margin:0 auto 40px;padding:0 20px;font-size:12px;color:v
     <table>
       <thead><tr><th>Op</th><th>Subject</th><th>Approved by (audit fact)</th><th>Stored artifact</th><th>Survives into commit record?</th></tr></thead>
       <tbody>
-        <tr><td><code>verify</code></td><td><code>to-1</code></td><td>op-1</td><td><code>assessments/&lt;order&gt;</code></td><td><span class="ok">yes — present in the commit record</span></td></tr>
-        <tr><td><code>dispatch</code></td><td><code>to-1</code></td><td>op-1</td><td><code>JPN-SHIPMENT-000000</code></td><td><span class="warn">no — audit only, not in commit record</span></td></tr>
-        <tr><td><code>settle</code></td><td><code>to-1</code></td><td>op-1</td><td><code>JPN-INVOICE-000000</code></td><td><span class="warn">no — audit only, not in commit record</span></td></tr>
-        <tr><td><code>verify</code></td><td><code>to-3</code></td><td>op-1</td><td><code>assessments/&lt;order&gt;</code></td><td><span class="ok">yes — present in the commit record</span></td></tr>
-        <tr><td><code>verify</code></td><td><code>to-4</code></td><td>op-1</td><td><code>assessments/&lt;order&gt;</code></td><td><span class="ok">yes — present in the commit record</span></td></tr>
-        <tr><td><code>verify</code></td><td><code>to-5</code></td><td>op-1</td><td><code>assessments/&lt;order&gt;</code></td><td><span class="ok">yes — present in the commit record</span></td></tr>
-        <tr><td><code>verify</code></td><td><code>to-6</code></td><td>op-1</td><td><code>assessments/&lt;order&gt;</code></td><td><span class="ok">yes — present in the commit record</span></td></tr>
+        <tr><td><code>:contract/verify</code></td><td><code>to-1</code></td><td>op-1</td><td><code>assessments/&lt;order&gt;</code></td><td><span class="ok">yes — present in the commit record</span></td></tr>
+        <tr><td><code>:shipment/dispatch</code></td><td><code>to-1</code></td><td>op-1</td><td><code>JPN-SHIPMENT-000000</code></td><td><span class="warn">no — audit only, not in commit record</span></td></tr>
+        <tr><td><code>:invoice/settle</code></td><td><code>to-1</code></td><td>op-1</td><td><code>JPN-INVOICE-000000</code></td><td><span class="warn">no — audit only, not in commit record</span></td></tr>
+        <tr><td><code>:contract/verify</code></td><td><code>to-3</code></td><td>op-1</td><td><code>assessments/&lt;order&gt;</code></td><td><span class="ok">yes — present in the commit record</span></td></tr>
+        <tr><td><code>:contract/verify</code></td><td><code>to-4</code></td><td>op-1</td><td><code>assessments/&lt;order&gt;</code></td><td><span class="ok">yes — present in the commit record</span></td></tr>
+        <tr><td><code>:contract/verify</code></td><td><code>to-5</code></td><td>op-1</td><td><code>assessments/&lt;order&gt;</code></td><td><span class="ok">yes — present in the commit record</span></td></tr>
+        <tr><td><code>:contract/verify</code></td><td><code>to-6</code></td><td>op-1</td><td><code>assessments/&lt;order&gt;</code></td><td><span class="ok">yes — present in the commit record</span></td></tr>
       </tbody>
     </table>
   </section>
@@ -170,24 +170,24 @@ footer{max-width:1180px;margin:0 auto 40px;padding:0 20px;font-size:12px;color:v
     <table>
       <thead><tr><th>Fact</th><th>Op</th><th>Subject</th><th>Disposition</th><th>Basis</th><th>Summary</th></tr></thead>
       <tbody>
-        <tr><td><span class="critical">governor-hold</span></td><td><code>verify</code></td><td><code>to-1</code></td><td>hold</td><td>phase-disabled</td><td></td></tr>
-        <tr><td><span class="critical">governor-hold</span></td><td><code>dispatch</code></td><td><code>to-1</code></td><td>hold</td><td>evidence-incomplete</td><td></td></tr>
-        <tr><td><span class="err">approval-rejected</span></td><td><code>intake</code></td><td><code>to-2</code></td><td>hold</td><td>approver-rejected</td><td></td></tr>
-        <tr><td><span class="ok">committed</span></td><td><code>intake</code></td><td><code>to-1</code></td><td>commit</td><td>id, counterparty</td><td>商社トレードオーダー記録更新: (:id :counterparty)</td></tr>
-        <tr><td><span class="ok">committed</span></td><td><code>verify</code></td><td><code>to-1</code></td><td>commit</td><td>外国為替及び外国貿易法 (Foreign Exchange and Foreign Trade Act, FEFTA); 輸出貿易管理令 (Export Trade Control Order), https://www.meti.go.jp/policy/anpo/</td><td>JPN (経済産業省 (METI) 貿易経済協力局 安全保障貿易管理課) 向け必要書類 4 件を提案</td></tr>
-        <tr><td><span class="ok">committed</span></td><td><code>dispatch</code></td><td><code>to-1</code></td><td>commit</td><td>to-1</td><td>to-1 向け出荷提案 (counterparty=Sendai Trading Co, commodity=Steel products)</td></tr>
-        <tr><td><span class="ok">committed</span></td><td><code>settle</code></td><td><code>to-1</code></td><td>commit</td><td>to-1</td><td>to-1 向け請求提案 (counterparty=Sendai Trading Co)</td></tr>
-        <tr><td><span class="critical">governor-hold</span></td><td><code>verify</code></td><td><code>to-2</code></td><td>hold</td><td>no-spec-basis</td><td></td></tr>
-        <tr><td><span class="ok">committed</span></td><td><code>verify</code></td><td><code>to-3</code></td><td>commit</td><td>外国為替及び外国貿易法 (Foreign Exchange and Foreign Trade Act, FEFTA); 輸出貿易管理令 (Export Trade Control Order), https://www.meti.go.jp/policy/anpo/</td><td>JPN (経済産業省 (METI) 貿易経済協力局 安全保障貿易管理課) 向け必要書類 4 件を提案</td></tr>
-        <tr><td><span class="ok">committed</span></td><td><code>verify</code></td><td><code>to-4</code></td><td>commit</td><td>外国為替及び外国貿易法 (Foreign Exchange and Foreign Trade Act, FEFTA); 輸出貿易管理令 (Export Trade Control Order), https://www.meti.go.jp/policy/anpo/</td><td>JPN (経済産業省 (METI) 貿易経済協力局 安全保障貿易管理課) 向け必要書類 4 件を提案</td></tr>
-        <tr><td><span class="ok">committed</span></td><td><code>verify</code></td><td><code>to-5</code></td><td>commit</td><td>外国為替及び外国貿易法 (Foreign Exchange and Foreign Trade Act, FEFTA); 輸出貿易管理令 (Export Trade Control Order), https://www.meti.go.jp/policy/anpo/</td><td>JPN (経済産業省 (METI) 貿易経済協力局 安全保障貿易管理課) 向け必要書類 4 件を提案</td></tr>
-        <tr><td><span class="ok">committed</span></td><td><code>verify</code></td><td><code>to-6</code></td><td>commit</td><td>外国為替及び外国貿易法 (Foreign Exchange and Foreign Trade Act, FEFTA); 輸出貿易管理令 (Export Trade Control Order), https://www.meti.go.jp/policy/anpo/</td><td>JPN (経済産業省 (METI) 貿易経済協力局 安全保障貿易管理課) 向け必要書類 4 件を提案</td></tr>
-        <tr><td><span class="critical">governor-hold</span></td><td><code>dispatch</code></td><td><code>to-3</code></td><td>hold</td><td>credit-uncleared</td><td></td></tr>
-        <tr><td><span class="critical">governor-hold</span></td><td><code>dispatch</code></td><td><code>to-4</code></td><td>hold</td><td>contract-missing</td><td></td></tr>
-        <tr><td><span class="critical">governor-hold</span></td><td><code>dispatch</code></td><td><code>to-5</code></td><td>hold</td><td>counterparty-sanctions-flag-unresolved</td><td></td></tr>
-        <tr><td><span class="critical">governor-hold</span></td><td><code>dispatch</code></td><td><code>to-6</code></td><td>hold</td><td>export-license-uncleared</td><td></td></tr>
-        <tr><td><span class="critical">governor-hold</span></td><td><code>dispatch</code></td><td><code>to-1</code></td><td>hold</td><td>already-dispatched</td><td></td></tr>
-        <tr><td><span class="critical">governor-hold</span></td><td><code>settle</code></td><td><code>to-1</code></td><td>hold</td><td>already-invoiced</td><td></td></tr>
+        <tr><td><span class="critical">governor-hold</span></td><td><code>:contract/verify</code></td><td><code>to-1</code></td><td>hold</td><td>phase-disabled</td><td></td></tr>
+        <tr><td><span class="critical">governor-hold</span></td><td><code>:shipment/dispatch</code></td><td><code>to-1</code></td><td>hold</td><td>evidence-incomplete</td><td></td></tr>
+        <tr><td><span class="err">approval-rejected</span></td><td><code>:order/intake</code></td><td><code>to-2</code></td><td>hold</td><td>approver-rejected</td><td></td></tr>
+        <tr><td><span class="ok">committed</span></td><td><code>:order/intake</code></td><td><code>to-1</code></td><td>commit</td><td>id, counterparty</td><td>商社トレードオーダー記録更新: (:id :counterparty)</td></tr>
+        <tr><td><span class="ok">committed</span></td><td><code>:contract/verify</code></td><td><code>to-1</code></td><td>commit</td><td>外国為替及び外国貿易法 (Foreign Exchange and Foreign Trade Act, FEFTA); 輸出貿易管理令 (Export Trade Control Order), https://www.meti.go.jp/policy/anpo/</td><td>JPN (経済産業省 (METI) 貿易経済協力局 安全保障貿易管理課) 向け必要書類 4 件を提案</td></tr>
+        <tr><td><span class="ok">committed</span></td><td><code>:shipment/dispatch</code></td><td><code>to-1</code></td><td>commit</td><td>to-1</td><td>to-1 向け出荷提案 (counterparty=Sendai Trading Co, commodity=Steel products)</td></tr>
+        <tr><td><span class="ok">committed</span></td><td><code>:invoice/settle</code></td><td><code>to-1</code></td><td>commit</td><td>to-1</td><td>to-1 向け請求提案 (counterparty=Sendai Trading Co)</td></tr>
+        <tr><td><span class="critical">governor-hold</span></td><td><code>:contract/verify</code></td><td><code>to-2</code></td><td>hold</td><td>no-spec-basis</td><td></td></tr>
+        <tr><td><span class="ok">committed</span></td><td><code>:contract/verify</code></td><td><code>to-3</code></td><td>commit</td><td>外国為替及び外国貿易法 (Foreign Exchange and Foreign Trade Act, FEFTA); 輸出貿易管理令 (Export Trade Control Order), https://www.meti.go.jp/policy/anpo/</td><td>JPN (経済産業省 (METI) 貿易経済協力局 安全保障貿易管理課) 向け必要書類 4 件を提案</td></tr>
+        <tr><td><span class="ok">committed</span></td><td><code>:contract/verify</code></td><td><code>to-4</code></td><td>commit</td><td>外国為替及び外国貿易法 (Foreign Exchange and Foreign Trade Act, FEFTA); 輸出貿易管理令 (Export Trade Control Order), https://www.meti.go.jp/policy/anpo/</td><td>JPN (経済産業省 (METI) 貿易経済協力局 安全保障貿易管理課) 向け必要書類 4 件を提案</td></tr>
+        <tr><td><span class="ok">committed</span></td><td><code>:contract/verify</code></td><td><code>to-5</code></td><td>commit</td><td>外国為替及び外国貿易法 (Foreign Exchange and Foreign Trade Act, FEFTA); 輸出貿易管理令 (Export Trade Control Order), https://www.meti.go.jp/policy/anpo/</td><td>JPN (経済産業省 (METI) 貿易経済協力局 安全保障貿易管理課) 向け必要書類 4 件を提案</td></tr>
+        <tr><td><span class="ok">committed</span></td><td><code>:contract/verify</code></td><td><code>to-6</code></td><td>commit</td><td>外国為替及び外国貿易法 (Foreign Exchange and Foreign Trade Act, FEFTA); 輸出貿易管理令 (Export Trade Control Order), https://www.meti.go.jp/policy/anpo/</td><td>JPN (経済産業省 (METI) 貿易経済協力局 安全保障貿易管理課) 向け必要書類 4 件を提案</td></tr>
+        <tr><td><span class="critical">governor-hold</span></td><td><code>:shipment/dispatch</code></td><td><code>to-3</code></td><td>hold</td><td>credit-uncleared</td><td></td></tr>
+        <tr><td><span class="critical">governor-hold</span></td><td><code>:shipment/dispatch</code></td><td><code>to-4</code></td><td>hold</td><td>contract-missing</td><td></td></tr>
+        <tr><td><span class="critical">governor-hold</span></td><td><code>:shipment/dispatch</code></td><td><code>to-5</code></td><td>hold</td><td>counterparty-sanctions-flag-unresolved</td><td></td></tr>
+        <tr><td><span class="critical">governor-hold</span></td><td><code>:shipment/dispatch</code></td><td><code>to-6</code></td><td>hold</td><td>export-license-uncleared</td><td></td></tr>
+        <tr><td><span class="critical">governor-hold</span></td><td><code>:shipment/dispatch</code></td><td><code>to-1</code></td><td>hold</td><td>already-dispatched</td><td></td></tr>
+        <tr><td><span class="critical">governor-hold</span></td><td><code>:invoice/settle</code></td><td><code>to-1</code></td><td>hold</td><td>already-invoiced</td><td></td></tr>
       </tbody>
     </table>
   </section>

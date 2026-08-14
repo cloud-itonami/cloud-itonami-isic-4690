@@ -180,9 +180,23 @@
       (str/replace ">" "&gt;")
       (str/replace "\"" "&quot;")))
 
-(defn- kw-name [v] (if (keyword? v) (name v) (str v)))
+(defn- kw-name
+  "Keyword -> its FULLY QUALIFIED name. `name` alone would render
+  `:contract/verify` as `verify`, silently collapsing it with
+  `:order/intake`'s sibling ops -- the namespace is the op contract."
+  [v]
+  (cond
+    (and (keyword? v) (namespace v)) (str (namespace v) "/" (name v))
+    (keyword? v)                     (name v)
+    :else                            (str v)))
 
 (defn- code [v] (str "<code>" (esc v) "</code>"))
+
+(defn- kw-code
+  "An op/keyword rendered the way it is written in source, e.g.
+  `:contract/verify`."
+  [v]
+  (code (str ":" (kw-name v))))
 
 (defn- pill [class label] (str "<span class=\"" class "\">" (esc label) "</span>"))
 
@@ -218,7 +232,7 @@
   clean and the rollout phase refused the write)."
   [ledger]
   (->> (holds ledger)
-       (mapcat #(or (seq (:basis %)) [(keyword (str "phase/" (name (:phase-reason % :unknown))))]))
+       (mapcat #(or (seq (:basis %)) [(:phase-reason % :unknown)]))
        distinct
        vec))
 
@@ -234,7 +248,7 @@
       (= :governor-hold (:t f))
       (pill "critical" (str "HARD hold · "
                             (or (some-> (first (:basis f)) kw-name)
-                                (str "phase-" (kw-name (:phase-reason f))))))
+                                (kw-name (:phase-reason f)))))
       :else (pill "muted" "in progress"))))
 
 (defn- lifecycle-cell [{:keys [dispatched? invoiced?]}]
@@ -250,7 +264,7 @@
   "Fixed 2-decimal rendering of the seeded price -- no locale, no
   wall-clock, so the page stays byte-stable."
   [n]
-  (when (number? n) (str (format "%.2f" (double n)))))
+  (when (number? n) (format "%.2f" (double n))))
 
 (defn- order-row [ledger {:keys [id order-id commodity-category counterparty
                                  jurisdiction price] :as o}]
@@ -271,10 +285,10 @@
        (flag-cell sanctions-screened? "screened" "NOT screened")))
 
 (defn- hold-row [{:keys [op subject basis violations confidence phase-reason phase]}]
-  (row (code (kw-name op)) (code subject)
+  (row (kw-code op) (code subject)
        (if (seq basis)
          (str/join " " (map #(pill "critical" (kw-name %)) basis))
-         (pill "err" (str "phase-" (kw-name phase-reason) " (phase " phase ")")))
+         (pill "err" (str (kw-name phase-reason) " (phase " phase ")")))
        (esc (or (some->> violations (map :detail) (str/join " / "))
                 (str "rollout phase " phase " does not permit this write")))
        (str "<span class=\"num\">" (esc confidence) "</span>")))
@@ -286,7 +300,7 @@
                :approval-rejected "err"
                "muted")
              (kw-name t))
-       (code (kw-name (or op :n-a)))
+       (kw-code (or op :n-a))
        (code subject)
        (esc (kw-name (or disposition "")))
        (esc (or (some->> basis seq (map kw-name) (str/join ", "))
@@ -322,7 +336,7 @@
   (let [write-in (sort (keep (fn [[p {:keys [writes]}]] (when (writes op) p)) phase/phases))
         auto-in  (sort (keep (fn [[p {:keys [auto]}]] (when (auto op) p)) phase/phases))
         high?    (contains? governor/high-stakes op)]
-    (row (code (kw-name op))
+    (row (kw-code op)
          (esc (str/join ", " (map str write-in)))
          (if (seq auto-in)
            (pill "ok" (str "phase " (str/join ", " (map str auto-in))))
@@ -366,7 +380,7 @@
                        :shipment/dispatch (or (:shipment-number order) "shipments/<record>")
                        :invoice/settle    (or (:invoice-number order) "invoices/<record>")
                        "trade-orders/<order>")]
-      (row (code (kw-name op)) (code subject) (esc by) (code stored-as)
+      (row (kw-code op) (code subject) (esc by) (code stored-as)
            (if kept?
              (pill "ok" "yes — present in the commit record")
              (pill "warn" "no — audit only, not in commit record"))))))
@@ -394,7 +408,6 @@
    "--color-neutral-solid-gray-600:#666666;"
    "--color-neutral-solid-gray-700:#4d4d4d;"
    "--color-neutral-solid-gray-900:#1a1a1a;"
-   "--color-primitive-blue-50:#e8f1fe;"
    "--color-primitive-blue-900:#0017c1;"
    "--color-primitive-green-50:#e6f5ec;"
    "--color-primitive-green-900:#115a36;"
