@@ -515,7 +515,10 @@
              (map (partial order-row ledger) orders)))
 
      (section
-      "Counterparty diligence &amp; trade-control facts"
+      ;; Plain "&" -- `section` runs the title through `esc`, so a
+      ;; pre-escaped "&amp;" here would be escaped a second time and the
+      ;; browser would show the entity text instead of an ampersand.
+      "Counterparty diligence & trade-control facts"
       (str "The exact booleans " (code "shosha.governor")
            " reads off each " (code "trade-order")
            " record. These are ground truth from the store — the governor never "
