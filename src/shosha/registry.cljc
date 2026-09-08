@@ -25,7 +25,7 @@
   a real shipment or settling a real invoice itself (that is
   `shosha.operation`'s `:shipment/dispatch`/`:invoice/settle`, always
   human-gated -- see README `Actuation`)."
-  (:require [clojure.string :as str]))
+  (:require [kotoba.lang.text :as str]))
 
 (defn- unsigned-certificate
   "Every certificate this actor produces is UNSIGNED -- signature is
@@ -62,7 +62,7 @@
     (throw (ex-info "shipment: jurisdiction required" {})))
   (when (< sequence 0)
     (throw (ex-info "shipment: sequence must be >= 0" {})))
-  (let [shipment-number (str (str/upper-case jurisdiction) "-SHIPMENT-" (zero-pad sequence 6))
+  (let [shipment-number (str (str/upper jurisdiction) "-SHIPMENT-" (zero-pad sequence 6))
         record {"record_id" shipment-number
                 "kind" "shipment-dispatch-draft"
                 "trade_order_id" trade-order-id
@@ -88,7 +88,7 @@
     (throw (ex-info "invoice: jurisdiction required" {})))
   (when (< sequence 0)
     (throw (ex-info "invoice: sequence must be >= 0" {})))
-  (let [invoice-number (str (str/upper-case jurisdiction) "-INVOICE-" (zero-pad sequence 6))
+  (let [invoice-number (str (str/upper jurisdiction) "-INVOICE-" (zero-pad sequence 6))
         record {"record_id" invoice-number
                 "kind" "trade-invoice-draft"
                 "trade_order_id" trade-order-id
