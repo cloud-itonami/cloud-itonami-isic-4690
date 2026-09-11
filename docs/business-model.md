@@ -290,7 +290,7 @@ requirements to make coverage look bigger.
 ## Maturity
 
 `:implemented` -- `ShoshaAdvisor` + `Shosha Trading Governor` run as
-real, tested code (`clojure -M:dev:test`: 36 tests / 174 assertions, 0
+real, tested code (`kbb -M:dev:test`: 36 tests / 174 assertions, 0
 failures; lint clean), following the SAME governed-actor architecture
 as the other prior actors across this fleet, with its own distinct,
 independently-named governor and its own direct-entity-boolean

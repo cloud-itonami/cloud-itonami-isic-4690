@@ -258,7 +258,7 @@ reasoning.
 - `MemStore` || `DatomicStore` parity is proven by
   `test/shosha/store_contract_test.cljk`.
 - 36 tests / 174 assertions pass; lint is clean; the demo
-  (`clojure -M:dev:run`) walks one clean dispatch + invoice lifecycle,
+  (`kbb -M:dev:run`) walks one clean dispatch + invoice lifecycle,
   plus seven HARD-hold scenarios (no spec-basis, credit-uncleared,
   contract-missing, export-license-uncleared, sanctions, double
   dispatch, double invoice), end-to-end.
