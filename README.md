@@ -96,7 +96,7 @@ construction.** Two independent layers enforce this
 (`shosha.governor`'s `:shipment/dispatch`/`:invoice/settle`
 high-stakes gate and `shosha.phase`'s phase table, which never puts
 either op in any phase's `:auto` set) -- see `shosha.phase`'s
-docstring and `test/shosha/phase_test.clj`'s
+docstring and `test/shosha/phase_test.cljk`'s
 `shipment-dispatch-never-auto-at-any-phase`/
 `invoice-settle-never-auto-at-any-phase`. The actor may draft, check
 and recommend; a human trading supervisor is always the one who
@@ -204,14 +204,14 @@ Robotics premise, above).
 
 | File | Role |
 |---|---|
-| `src/shosha/store.cljc` | **Store** protocol -- `MemStore` ‖ `DatomicStore` (`langchain.db`) + append-only audit ledger + shipment AND invoice history (dual history). The double-actuation guard checks dedicated `:dispatched?`/`:invoiced?` booleans rather than a `:status` value |
-| `src/shosha/registry.cljc` | Shipment/invoice draft records (record construction only -- the Shosha Trading Governor's checks are direct entity booleans, so there are no pure range-check functions to host here, unlike the crude sibling's registry) |
-| `src/shosha/facts.cljc` | Per-jurisdiction export-control / sanctions catalog with an official spec-basis citation per entry, honest coverage reporting |
-| `src/shosha/shoshaadvisor.cljc` | **ShoshaAdvisor** -- `mock-advisor` ‖ `llm-advisor`; intake/contract-verification/dispatch/invoice proposals |
-| `src/shosha/governor.cljc` | **Shosha Trading Governor** -- 6 HARD checks (spec-basis · evidence-incomplete · credit-uncleared · contract-missing · export-license-uncleared · counterparty-sanctions-flag-unresolved) + 2 double-actuation guards + 1 soft (confidence/actuation gate) |
-| `src/shosha/phase.cljc` | **Phase 0→3** -- read-only → assisted intake → assisted verify → supervised (dispatch/invoice always human; order intake is the ONLY auto-eligible op, no direct capital risk) |
-| `src/shosha/operation.cljc` | **OperationActor** -- langgraph StateGraph |
-| `src/shosha/sim.cljc` | demo driver |
+| `src/shosha/store.cljk` | **Store** protocol -- `MemStore` ‖ `DatomicStore` (`langchain.db`) + append-only audit ledger + shipment AND invoice history (dual history). The double-actuation guard checks dedicated `:dispatched?`/`:invoiced?` booleans rather than a `:status` value |
+| `src/shosha/registry.cljk` | Shipment/invoice draft records (record construction only -- the Shosha Trading Governor's checks are direct entity booleans, so there are no pure range-check functions to host here, unlike the crude sibling's registry) |
+| `src/shosha/facts.cljk` | Per-jurisdiction export-control / sanctions catalog with an official spec-basis citation per entry, honest coverage reporting |
+| `src/shosha/shoshaadvisor.cljk` | **ShoshaAdvisor** -- `mock-advisor` ‖ `llm-advisor`; intake/contract-verification/dispatch/invoice proposals |
+| `src/shosha/governor.cljk` | **Shosha Trading Governor** -- 6 HARD checks (spec-basis · evidence-incomplete · credit-uncleared · contract-missing · export-license-uncleared · counterparty-sanctions-flag-unresolved) + 2 double-actuation guards + 1 soft (confidence/actuation gate) |
+| `src/shosha/phase.cljk` | **Phase 0→3** -- read-only → assisted intake → assisted verify → supervised (dispatch/invoice always human; order intake is the ONLY auto-eligible op, no direct capital risk) |
+| `src/shosha/operation.cljk` | **OperationActor** -- langgraph StateGraph |
+| `src/shosha/sim.cljk` | demo driver |
 | `test/shosha/*_test.clj` | governor contract · phase invariants · store parity · registry conformance · facts coverage |
 
 ## Business-process coverage (honest)
