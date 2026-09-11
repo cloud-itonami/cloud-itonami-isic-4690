@@ -148,7 +148,7 @@ discipline every prior governor's guards establish, informed by
 `shosha.store/Store` is implemented by both `MemStore` (atom-backed,
 default for dev/tests/demo) and `DatomicStore` (`langchain.db`-backed),
 proven to satisfy the same contract in
-`test/shosha/store_contract_test.clj`. The ledger stays append-only on
+`test/shosha/store_contract_test.cljk`. The ledger stays append-only on
 every backend: which trade-order was verified for a jurisdiction with
 no official spec-basis, which counterparty had credit-uncleared / no
 contract / an unresolved export-control classification / an unresolved
@@ -256,7 +256,7 @@ reasoning.
   `robotics true` -- an honest, precedent-grounded departure, not an
   oversight.
 - `MemStore` || `DatomicStore` parity is proven by
-  `test/shosha/store_contract_test.clj`.
+  `test/shosha/store_contract_test.cljk`.
 - 36 tests / 174 assertions pass; lint is clean; the demo
   (`clojure -M:dev:run`) walks one clean dispatch + invoice lifecycle,
   plus seven HARD-hold scenarios (no spec-basis, credit-uncleared,

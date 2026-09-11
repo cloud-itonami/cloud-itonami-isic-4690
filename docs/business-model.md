@@ -81,7 +81,7 @@ ISIC 4690) and to the three `:social-impact` tags in `blueprint.edn`
 (`:trade-compliance`, `:cross-border-market-access`, `:transparency`).
 
 This is the rule the companion contract test
-(`test/shosha/governor_contract_test.clj`) encodes end-to-end: the
+(`test/shosha/governor_contract_test.cljk`) encodes end-to-end: the
 ShoshaAdvisor never dispatches a cross-border shipment to a
 counterparty or settles an invoice the Shosha Trading Governor would
 reject, `:shipment/dispatch` and `:invoice/settle` NEVER auto-commit
