@@ -12,7 +12,7 @@
   shipment/invoice number, rule name, violation detail and confidence
   on the page comes out of that run -- none is typed in here.
 
-  The scenario is a superset of `shosha.sim` (`clojure -M:dev:run`,
+  The scenario is a superset of `shosha.sim` (`kbb -M:dev:run`,
   run BEFORE this file was written to learn the real ids and outputs).
   It adds three governance layers `sim` does not reach:
 
@@ -36,7 +36,7 @@
   refusing is not evidence that the governor works. That is a
   build-time invariant, not a convention.
 
-  Usage: `clojure -M:dev:render-html [out-file]`
+  Usage: `kbb -M:dev:render-html [out-file]`
   (default `docs/samples/operator-console.html`)."
   (:require [kotoba.lang.text :as str]
             [langgraph.graph :as g]
@@ -489,7 +489,7 @@
      (section
       "This run"
       (str "Generated at build time by " (code "shosha.render-html")
-           " (" (code "clojure -M:dev:render-html") ") from a live "
+           " (" (code "kbb -M:dev:render-html") ") from a live "
            (code "langgraph.graph/run*") " scenario over "
            (code "shosha.store/demo-data") ". Nothing on this page is typed in by hand; "
            "no timestamps or random values, so consecutive builds are byte-identical.")

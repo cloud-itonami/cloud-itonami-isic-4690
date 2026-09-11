@@ -1,5 +1,5 @@
 (ns shosha.sim
-  "Demo driver -- `clojure -M:dev:run`. Walks a clean trade-order
+  "Demo driver -- `kbb -M:dev:run`. Walks a clean trade-order
   through intake -> contract verification -> shipment dispatch
   (escalate/approve/commit) -> invoice settlement (escalate/approve/
   commit), then shows HARD-hold scenarios: a jurisdiction with no

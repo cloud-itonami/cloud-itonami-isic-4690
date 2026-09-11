@@ -32,9 +32,9 @@
   :dev {:override-deps
         {io.github.kotoba-lang/langchain
          {:local/root "../../kotoba-lang/langchain"}}}
-  ;; clojure -M:dev:run  -> drive the demo through one OperationActor
+  ;; kbb -M:dev:run  -> drive the demo through one OperationActor
   :run {:main-opts ["-m" "shosha.sim"]}
-  ;; clojure -M:dev:render-html  -> drive the REAL actor stack and emit
+  ;; kbb -M:dev:render-html  -> drive the REAL actor stack and emit
   ;; docs/samples/operator-console.html from the resulting ledger.
   ;; Build-time invariant: refuses to write if the run produced zero
   ;; :governor-hold facts.
