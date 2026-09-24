@@ -1,5 +1,5 @@
 (ns shosha.registry-test
-  (:require [clojure.test :refer [deftest is]]
+  (:require [kotoba.test :refer [deftest is]]
             [shosha.registry :as r]))
 
 ;; The general-trading domain checks (credit-clearance, contract-on-file,
